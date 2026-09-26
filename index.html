@@ -110,8 +110,8 @@
             <input type="text" id="watchEmail" readonly placeholder="chưa tạo — bấm nút 1">
         </div>
         <div class="note">
-            Copy email này dán vào form VMOS. Đợi VMOS gửi OTP → web tự bắt được.
-            (1secmail.com — miễn phí, không cần đăng ký, có API sẵn)
+            Copy email này dán vào form VMOS. Đợi VMOS gửi OTP → web tự bắt.
+            (mail.tm — miễn phí, API public, hỗ trợ CORS)
         </div>
     </div>
 
@@ -139,15 +139,15 @@
 
 <script>
 // ============================================================
-// CẤU HÌNH 1SECMAIL
+// CẤU HÌNH MAIL.TM
 // ============================================================
-const API = 'https://www.1secmail.com/api/v1/';
-const DOMAINS = ['1secmail.com', '1secmail.net', '1secmail.org', 'kzccv.com', 'qiott.com', 'wuuvo.com'];
+const API = 'https://api.mail.tm';
 
 // ============================================================
 // BIẾN
 // ============================================================
 let watchEmail = null;
+let authToken = null;
 let isScanning = false;
 let scanTimer = null;
 let pollCount = 0;
@@ -172,47 +172,98 @@ function setBadge(id, text, color) {
 }
 
 // ============================================================
-// TẠO EMAIL 1SECMAIL
+// TẠO EMAIL MAIL.TM
 // ============================================================
-function createEmail() {
-    log('ĐANG TẠO EMAIL 1SECMAIL...');
+async function createEmail() {
+    log('ĐANG TẠO EMAIL MAIL.TM...');
     setBadge('emailStatus', 'ĐANG TẠO', 'yellow');
 
-    const user = 'vmos' + Math.random().toString(36).substring(2, 12);
-    const domain = DOMAINS[Math.floor(Math.random() * DOMAINS.length)];
-    const email = `${user}@${domain}`;
+    try {
+        // Bước 1: Lấy domain khả dụng
+        const domainsRes = await fetch(`${API}/domains`);
+        if (!domainsRes.ok) throw new Error(`HTTP ${domainsRes.status}`);
+        const domainsData = await domainsRes.json();
+        
+        const domains = domainsData['hydra:member'] || domainsData.member || [];
+        if (!domains.length) throw new Error('Không có domain khả dụng');
+        
+        const domain = domains[0].domain;
+        const username = 'vmos' + Math.random().toString(36).substring(2, 12);
+        const email = `${username}@${domain}`;
+        const password = 'Pass' + Math.random().toString(36).substring(2, 15) + '!';
 
-    watchEmail = email;
-    seenMessageIds = new Set();
-    lastOTP = null;
+        log(`DOMAIN: ${domain}`, 'info');
 
-    document.getElementById('watchEmail').value = email;
-    document.getElementById('otpDisplay').textContent = '------';
-    document.getElementById('otpStatus').value = 'CHƯA CÓ';
-    document.getElementById('otpTime').value = '---';
-    document.getElementById('pollCount').textContent = '0';
+        // Bước 2: Tạo account
+        const accRes = await fetch(`${API}/accounts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: email, password: password })
+        });
+        
+        if (!accRes.ok) {
+            const errText = await accRes.text();
+            throw new Error(`Tạo account thất bại: ${accRes.status} ${errText.substring(0, 100)}`);
+        }
 
-    setBadge('emailStatus', 'SẴN SÀNG', '');
-    log(`EMAIL ĐÃ TẠO: ${email}`, 'success');
-    log('COPY EMAIL NÀY DÁN VÀO FORM VMOS.', 'info');
-    document.getElementById('btnStartScan').disabled = false;
+        log('ĐÃ TẠO ACCOUNT.', 'success');
+
+        // Bước 3: Lấy token
+        const tokRes = await fetch(`${API}/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: email, password: password })
+        });
+        
+        if (!tokRes.ok) throw new Error(`Lấy token thất bại: ${tokRes.status}`);
+        const tokData = await tokRes.json();
+        authToken = tokData.token;
+
+        watchEmail = email;
+        seenMessageIds = new Set();
+        lastOTP = null;
+
+        document.getElementById('watchEmail').value = email;
+        document.getElementById('otpDisplay').textContent = '------';
+        document.getElementById('otpStatus').value = 'CHƯA CÓ';
+        document.getElementById('otpTime').value = '---';
+        document.getElementById('pollCount').textContent = '0';
+
+        setBadge('emailStatus', 'SẴN SÀNG', '');
+        log(`EMAIL ĐÃ TẠO: ${email}`, 'success');
+        log('COPY EMAIL NÀY DÁN VÀO FORM VMOS.', 'info');
+        document.getElementById('btnStartScan').disabled = false;
+
+    } catch (e) {
+        log(`LỖI: ${e.message}`, 'error');
+        log('KIỂM TRA: ĐÃ BẬT VPN CHƯA? MAIL.TM CÓ THỂ BỊ CHẶN Ở VN.', 'error');
+        setBadge('emailStatus', 'LỖI', 'red');
+    }
 }
 
 // ============================================================
-// GỌI API 1SECMAIL
+// GỌI API MAIL.TM
 // ============================================================
-async function fetchInbox(email) {
-    const [login, domain] = email.split('@');
-    const url = `${API}?action=getMessages&login=${login}&domain=${domain}`;
-    const res = await fetch(url);
+async function fetchInbox() {
+    if (!authToken) throw new Error('Chưa có token');
+    
+    const res = await fetch(`${API}/messages`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const data = await res.json();
+    
+    return data['hydra:member'] || data.member || [];
 }
 
-async function fetchMessage(email, id) {
-    const [login, domain] = email.split('@');
-    const url = `${API}?action=readMessage&login=${login}&domain=${domain}&id=${id}`;
-    const res = await fetch(url);
+async function fetchMessage(id) {
+    if (!authToken) throw new Error('Chưa có token');
+    
+    const res = await fetch(`${API}/messages/${id}`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
 }
@@ -221,13 +272,13 @@ async function fetchMessage(email, id) {
 // QUÉT INBOX
 // ============================================================
 async function scanInbox() {
-    if (!watchEmail) return;
+    if (!watchEmail || !authToken) return;
 
     pollCount++;
     document.getElementById('pollCount').textContent = pollCount;
 
     try {
-        const messages = await fetchInbox(watchEmail);
+        const messages = await fetchInbox();
 
         if (!Array.isArray(messages) || messages.length === 0) {
             return;
@@ -240,15 +291,13 @@ async function scanInbox() {
             if (seenMessageIds.has(id)) continue;
             seenMessageIds.add(id);
 
-            log(`EMAIL MỚI: ${msg.subject || '(không tiêu đề)'} TỪ ${msg.from}`, 'info');
+            log(`EMAIL MỚI: ${msg.subject || '(không tiêu đề)'}`, 'info');
 
-            // Lấy nội dung đầy đủ
-            const full = await fetchMessage(watchEmail, id);
+            const full = await fetchMessage(id);
             if (!full) continue;
 
-            const text = (full.subject || '') + ' ' + (full.textBody || '') + ' ' + (full.body || '');
+            const text = (full.subject || '') + ' ' + (full.text || '') + ' ' + (full.html || '');
 
-            // Tìm OTP 6 số
             const m = text.match(/\b\d{6}\b/);
             if (m) {
                 showOTP(m[0]);
@@ -278,14 +327,12 @@ function showOTP(otp) {
 
     log(`OTP: ${otp}`, 'success');
 
-    // Copy clipboard
     if (navigator.clipboard) {
         navigator.clipboard.writeText(otp)
             .then(() => log('ĐÃ COPY VÀO CLIPBOARD.', 'success'))
             .catch(() => log('COPY THỦ CÔNG.', 'info'));
     }
 
-    // Bíp
     try {
         const ac = new (window.AudioContext || window.webkitAudioContext)();
         [0, 200, 400].forEach(d => setTimeout(() => {
@@ -298,7 +345,6 @@ function showOTP(otp) {
         setTimeout(() => ac.close(), 1000);
     } catch (e) {}
 
-    // Thông báo
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
             new Notification('VMOS OTP', { body: otp, requireInteraction: true, tag: 'vmos-otp' });
@@ -311,7 +357,7 @@ function showOTP(otp) {
 // ============================================================
 function startScan() {
     if (isScanning) return;
-    if (!watchEmail) { log('CHƯA CÓ EMAIL.', 'error'); return; }
+    if (!watchEmail || !authToken) { log('CHƯA CÓ EMAIL.', 'error'); return; }
 
     isScanning = true;
     pollCount = 0;
@@ -362,7 +408,7 @@ document.getElementById('btnClear').addEventListener('click', () => {
 window.addEventListener('load', () => {
     log('HỆ THỐNG SẴN SÀNG.');
     log('QUY TRÌNH: BẤM 1 → COPY EMAIL → NHẬP VMOS → BẤM 2.', 'info');
-    log('EMAIL DÙNG 1SECMAIL.COM — KHÔNG CẦN PROXY, KHÔNG CẦN SUPABASE.', 'success');
+    log('EMAIL DÙNG MAIL.TM — CÓ API PUBLIC, HỖ TRỢ CORS.', 'success');
 });
 </script>
 </body>
