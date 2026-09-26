@@ -6,186 +6,99 @@
     <title>VMOS OTP Reader - dt</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
         body {
-            background: #0a0a0a;
-            color: #00ff00;
+            background: #0a0a0a; color: #00ff00;
             font-family: 'Courier New', monospace;
-            padding: 15px;
-            line-height: 1.5;
+            padding: 15px; line-height: 1.5;
         }
-
         .container { max-width: 800px; margin: 0 auto; }
-
         header {
             border-bottom: 2px solid #00ff00;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
+            padding-bottom: 10px; margin-bottom: 15px;
         }
-
         h1 { font-size: 15px; letter-spacing: 2px; }
         h2 {
-            font-size: 12px;
-            color: #ffff00;
-            margin-bottom: 8px;
-            border-left: 3px solid #ffff00;
+            font-size: 12px; color: #ffff00;
+            margin-bottom: 8px; border-left: 3px solid #ffff00;
             padding-left: 8px;
         }
-
         .box {
-            border: 1px solid #00ff00;
-            padding: 12px;
-            margin-bottom: 12px;
-            background: #111;
+            border: 1px solid #00ff00; padding: 12px;
+            margin-bottom: 12px; background: #111;
         }
-
-        .status-bar {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            font-size: 11px;
-            margin-top: 8px;
-        }
-
         .badge {
-            background: #00ff00;
-            color: #000;
-            padding: 3px 8px;
-            font-weight: bold;
+            background: #00ff00; color: #000;
+            padding: 3px 8px; font-weight: bold; font-size: 11px;
         }
-
         .badge.red { background: #ff4444; color: #fff; }
         .badge.yellow { background: #ffff00; color: #000; }
         .badge.gray { background: #444; color: #aaa; }
-
         button {
-            background: #00ff00;
-            color: #000;
-            border: none;
-            padding: 10px 16px;
-            font-family: inherit;
-            font-weight: bold;
-            font-size: 12px;
-            cursor: pointer;
-            margin: 3px 3px 3px 0;
-            letter-spacing: 1px;
+            background: #00ff00; color: #000; border: none;
+            padding: 10px 16px; font-family: inherit;
+            font-weight: bold; font-size: 12px; cursor: pointer;
+            margin: 3px 3px 3px 0; letter-spacing: 1px;
         }
-
         button:hover:not(:disabled) { background: #00cc00; }
         button:disabled { background: #333; color: #666; cursor: not-allowed; }
-
         button.danger { background: #ff4444; color: #fff; }
-        button.danger:hover:not(:disabled) { background: #cc0000; }
-
         input {
-            background: #000;
-            border: 1px solid #00ff00;
-            color: #00ff00;
-            padding: 8px;
-            font-family: inherit;
-            font-size: 12px;
-            width: 100%;
+            background: #000; border: 1px solid #00ff00;
+            color: #00ff00; padding: 8px;
+            font-family: inherit; font-size: 12px; width: 100%;
         }
-
         .otp-display {
-            font-size: 56px;
-            color: #00ff00;
-            text-align: center;
-            padding: 20px;
-            border: 3px dashed #00ff00;
-            background: #000;
-            letter-spacing: 12px;
-            font-weight: bold;
-            margin: 10px 0;
+            font-size: 56px; color: #00ff00; text-align: center;
+            padding: 20px; border: 3px dashed #00ff00; background: #000;
+            letter-spacing: 12px; font-weight: bold; margin: 10px 0;
             transition: all 0.3s;
         }
-
         .otp-display.found {
-            border-color: #ffff00;
-            color: #ffff00;
+            border-color: #ffff00; color: #ffff00;
             animation: pulse 0.5s ease-in-out 4;
         }
-
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.05); }
         }
-
         .log {
-            height: 180px;
-            overflow-y: auto;
-            font-size: 11px;
-            white-space: pre-wrap;
-            background: #000;
-            border: 1px solid #333;
-            padding: 10px;
+            height: 220px; overflow-y: auto; font-size: 11px;
+            white-space: pre-wrap; background: #000;
+            border: 1px solid #333; padding: 10px;
         }
-
-        .log::-webkit-scrollbar { width: 6px; }
-        .log::-webkit-scrollbar-track { background: #111; }
-        .log::-webkit-scrollbar-thumb { background: #00ff00; }
-
         .success { color: #00ff00; }
         .error { color: #ff4444; }
         .info { color: #ffff00; }
-        .dim { color: #666; }
-
-        iframe {
-            width: 100%;
-            height: 600px;
-            border: 2px solid #00ff00;
-            background: #fff;
-            display: block;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .field label {
-            display: block;
-            font-size: 11px;
-            color: #ffff00;
-            margin-bottom: 4px;
+            display: block; font-size: 11px;
+            color: #ffff00; margin-bottom: 4px;
         }
-
-        .note {
-            font-size: 10px;
-            color: #888;
-            font-style: italic;
-            margin-top: 5px;
-            line-height: 1.4;
-        }
-
+        .note { font-size: 10px; color: #888; font-style: italic; margin-top: 5px; }
         @media (max-width: 600px) {
             .grid { grid-template-columns: 1fr; }
             .otp-display { font-size: 40px; letter-spacing: 8px; }
-            iframe { height: 400px; }
         }
     </style>
 </head>
 <body>
-
 <div class="container">
 
     <header>
         <h1>VMOS OTP READER — dt</h1>
-        <div class="status-bar">
-            <span>IFRAME: <span id="ifStatus" class="badge gray">CHƯA TẢI</span></span>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin-top:8px;">
+            <span>EMAIL: <span id="emailStatus" class="badge gray">CHƯA TẠO</span></span>
             <span>SCAN: <span id="scanStatus" class="badge gray">DỪNG</span></span>
-            <span>COUNT: <span id="scanCount" class="badge gray">0</span></span>
+            <span>POLL: <span id="pollCount" class="badge gray">0</span></span>
         </div>
     </header>
 
     <div class="box">
         <h2>ĐIỀU KHIỂN</h2>
-        <button id="btnLoad">1. TẢI UNLIMITMAIL</button>
-        <button id="btnReadEmail">2. ĐỌC EMAIL</button>
-        <button id="btnStartScan" disabled>3. BẮT ĐẦU QUÉT OTP</button>
-        <button id="btnStopScan" class="danger" disabled>DỪNG QUÉT</button>
-        <button id="btnManualScan">QUÉT NGAY</button>
+        <button id="btnCreate">1. TẠO EMAIL MỚI</button>
+        <button id="btnStartScan" disabled>2. BẮT ĐẦU QUÉT OTP</button>
+        <button id="btnStopScan" class="danger" disabled>DỪNG</button>
+        <button id="btnManual">QUÉT NGAY</button>
         <button id="btnTestNotify">TEST THÔNG BÁO</button>
         <button id="btnClear">XÓA LOG</button>
     </div>
@@ -194,12 +107,10 @@
         <h2>THÔNG TIN EMAIL</h2>
         <div class="field">
             <label>EMAIL ĐANG THEO DÕI</label>
-            <input type="text" id="watchEmail" readonly placeholder="chưa đọc — bấm nút 2">
+            <input type="text" id="watchEmail" readonly placeholder="chưa tạo — bấm nút 1">
         </div>
         <div class="note">
-            MẸO: Nếu iframe không hiện, mở trực tiếp
-            <a href="https://unlimitmail.com/vi/temp-mail" target="_blank" style="color:#00ff00;">UnlimitMail</a>
-            ở tab khác rồi copy email dán vào ô trên, sau đó bấm nút 3 để quét thủ công.
+            Copy email này vào form VMOS đăng ký. Đợi VMOS gửi OTP → web tự bắt.
         </div>
     </div>
 
@@ -223,29 +134,28 @@
         <div class="log" id="log"></div>
     </div>
 
-    <div class="box">
-        <h2>IFRAME UNLIMITMAIL</h2>
-        <iframe id="mailFrame" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
-        <div class="note">
-            IFRAME CÓ THỂ BỊ CHẶN BỞI UNLIMITMAIL. NẾU TRẮNG TRƠN → DÙNG CÁCH THỦ CÔNG (MỞ TAB MỚI).
-        </div>
-    </div>
-
 </div>
 
 <script>
 // ============================================================
-// BIẾN TOÀN CỤC
+// CẤU HÌNH
 // ============================================================
-let isScanning = false;
-let scanTimer = null;
-let scanCount = 0;
-let lastOTP = null;
-let watchEmail = null;
-let emailFromFrame = false;
+const SUPABASE_URL = 'https://olsztipsxhopueenrdgu.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_znEJflGWJOA1MA54SoebRg_Wkespji2';
+const PROXY_URL = `${SUPABASE_URL}/functions/v1/unlimit-proxy`;
 
 // ============================================================
-// HÀM LOG
+// BIẾN
+// ============================================================
+let watchEmail = null;
+let isScanning = false;
+let scanTimer = null;
+let pollCount = 0;
+let lastOTP = null;
+let lastMessageId = null;
+
+// ============================================================
+// LOG
 // ============================================================
 function log(msg, type = 'info') {
     const el = document.getElementById('log');
@@ -262,95 +172,91 @@ function setBadge(id, text, color) {
 }
 
 // ============================================================
-// ĐỌC EMAIL TỪ IFRAME
+// GỌI PROXY
 // ============================================================
-function readEmailFromFrame() {
-    log('ĐANG ĐỌC EMAIL TỪ IFRAME...');
+async function proxyCall(action, params = {}) {
+    const qs = new URLSearchParams({ action, ...params });
+    const url = `${PROXY_URL}?${qs.toString()}`;
+
+    const res = await fetch(url, {
+        headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'apikey': SUPABASE_ANON_KEY
+        }
+    });
+
+    if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`HTTP ${res.status}: ${t.substring(0, 200)}`);
+    }
+    return await res.json();
+}
+
+// ============================================================
+// TẠO EMAIL
+// ============================================================
+async function createEmail() {
+    log('ĐANG GỌI PROXY TẠO EMAIL...');
+    setBadge('emailStatus', 'ĐANG TẠO', 'yellow');
+
     try {
-        const frame = document.getElementById('mailFrame');
-        const doc = frame.contentDocument || frame.contentWindow.document;
+        const data = await proxyCall('generate');
+        const email = data.email || data.address || data.mail || data.data?.email;
 
-        if (!doc || !doc.body) {
-            log('KHÔNG TRUY CẬP ĐƯỢC DOM (CÓ THỂ BỊ CORS).', 'error');
-            return null;
-        }
-
-        let email = null;
-
-        // Cách 1: input readonly chứa email
-        const inputs = doc.querySelectorAll('input');
-        for (const inp of inputs) {
-            const v = (inp.value || '').trim();
-            if (/^[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(v)) {
-                email = v;
-                break;
-            }
-        }
-
-        // Cách 2: tìm text trực tiếp có dạng email
         if (!email) {
-            const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-            let node;
-            while (node = walker.nextNode()) {
-                const t = (node.textContent || '').trim();
-                if (/^[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(t)) {
-                    email = t;
-                    break;
-                }
-            }
+            log(`RESPONSE KHÔNG CÓ EMAIL: ${JSON.stringify(data).substring(0, 200)}`, 'error');
+            setBadge('emailStatus', 'LỖI FORMAT', 'red');
+            return;
         }
 
-        // Cách 3: regex trên toàn bộ text
-        if (!email) {
-            const bodyText = doc.body.innerText || '';
-            const m = bodyText.match(/[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
-            if (m) email = m[0];
-        }
-
-        if (email) {
-            watchEmail = email;
-            emailFromFrame = true;
-            document.getElementById('watchEmail').value = email;
-            log(`EMAIL ĐỌC ĐƯỢC: ${email}`, 'success');
-            return email;
-        } else {
-            log('KHÔNG TÌM THẤY EMAIL TRONG IFRAME.', 'error');
-            return null;
-        }
+        watchEmail = email;
+        document.getElementById('watchEmail').value = email;
+        setBadge('emailStatus', 'SẴN SÀNG', '');
+        log(`EMAIL ĐÃ TẠO: ${email}`, 'success');
+        log('COPY EMAIL NÀY VÀO VMOS.', 'info');
+        document.getElementById('btnStartScan').disabled = false;
     } catch (e) {
-        log(`LỖI ĐỌC IFRAME: ${e.message}`, 'error');
-        log('CÓ THỂ BỊ CORS. DÙNG CÁCH THỦ CÔNG.', 'error');
-        return null;
+        log(`LỖI: ${e.message}`, 'error');
+        log('KIỂM TRA: EDGE FUNCTION ĐÃ DEPLOY CHƯA? ENDPOINT ĐÃ ĐÚNG CHƯA?', 'error');
+        setBadge('emailStatus', 'LỖI', 'red');
     }
 }
 
 // ============================================================
-// QUÉT OTP TỪ IFRAME
+// QUÉT INBOX
 // ============================================================
-function scanOTPFromFrame() {
+async function scanInbox() {
+    if (!watchEmail) return;
+
+    pollCount++;
+    document.getElementById('pollCount').textContent = pollCount;
+
     try {
-        const frame = document.getElementById('mailFrame');
-        const doc = frame.contentDocument || frame.contentWindow.document;
+        const data = await proxyCall('inbox', { email: watchEmail });
+        const messages = data.messages || data.data || data.inbox || (Array.isArray(data) ? data : []);
 
-        if (!doc || !doc.body) return null;
+        if (!messages.length) return;
 
-        const bodyText = doc.body.innerText || '';
+        for (const msg of messages) {
+            const id = msg.id || msg.uid || msg.message_id;
+            if (id && id === lastMessageId) continue;
+            lastMessageId = id;
 
-        // Ưu tiên tìm OTP cạnh "mã xác minh"
-        const patterns = [
-            /mã xác minh[^0-9]{0,100}?(\d{6})/i,
-            /mã[^0-9]{0,80}?(\d{6})/i,
-            /code[^0-9]{0,80}?(\d{6})/i,
-            /\b(\d{6})\b/
-        ];
+            const subject = msg.subject || msg.title || '';
+            const body = msg.body || msg.html || msg.text || msg.content || msg.intro || '';
+            const text = subject + ' ' + body;
 
-        for (const pat of patterns) {
-            const m = bodyText.match(pat);
-            if (m && m[1]) return m[1];
+            log(`EMAIL MỚI: ${subject}`, 'info');
+
+            const m = text.match(/\b\d{6}\b/);
+            if (m) {
+                showOTP(m[0]);
+                stopScan();
+                return;
+            }
         }
-        return null;
     } catch (e) {
-        return null;
+        log(`LỖI QUÉT: ${e.message}`, 'error');
     }
 }
 
@@ -358,6 +264,9 @@ function scanOTPFromFrame() {
 // HIỂN THỊ OTP
 // ============================================================
 function showOTP(otp) {
+    if (otp === lastOTP) return;
+    lastOTP = otp;
+
     const display = document.getElementById('otpDisplay');
     display.textContent = otp;
     display.classList.add('found');
@@ -368,135 +277,62 @@ function showOTP(otp) {
 
     log(`OTP: ${otp}`, 'success');
 
-    // Copy clipboard
-    if (navigator.clipboard && navigator.clipboard.writeText) {
+    if (navigator.clipboard) {
         navigator.clipboard.writeText(otp)
-            .then(() => log('ĐÃ COPY OTP VÀO CLIPBOARD.', 'success'))
-            .catch(() => log('KHÔNG COPY ĐƯỢC — COPY THỦ CÔNG.', 'info'));
+            .then(() => log('ĐÃ COPY VÀO CLIPBOARD.', 'success'))
+            .catch(() => log('COPY THỦ CÔNG.', 'info'));
     }
 
-    // Âm thanh
     try {
         const ac = new (window.AudioContext || window.webkitAudioContext)();
-        [0, 200, 400].forEach(delay => {
-            setTimeout(() => {
-                const osc = ac.createOscillator();
-                const gain = ac.createGain();
-                osc.frequency.value = 1000;
-                osc.connect(gain);
-                gain.connect(ac.destination);
-                gain.gain.value = 0.3;
-                osc.start();
-                osc.stop(ac.currentTime + 0.15);
-            }, delay);
-        });
+        [0, 200, 400].forEach(d => setTimeout(() => {
+            const o = ac.createOscillator(), g = ac.createGain();
+            o.frequency.value = 1000;
+            o.connect(g); g.connect(ac.destination);
+            g.gain.value = 0.3;
+            o.start(); o.stop(ac.currentTime + 0.15);
+        }, d));
         setTimeout(() => ac.close(), 1000);
-    } catch (e) { /* bỏ qua */ }
+    } catch (e) {}
 
-    // Thông báo desktop
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
-            new Notification('VMOS OTP', {
-                body: otp,
-                requireInteraction: true,
-                tag: 'vmos-otp'
-            });
-        } catch (e) { /* bỏ qua */ }
+            new Notification('VMOS OTP', { body: otp, requireInteraction: true, tag: 'vmos-otp' });
+        } catch (e) {}
     }
 }
 
 // ============================================================
-// QUÉT TỰ ĐỘNG
+// ĐIỀU KHIỂN QUÉT
 // ============================================================
 function startScan() {
-    if (isScanning) {
-        log('ĐANG QUÉT RỒI.', 'info');
-        return;
-    }
-
-    if (!emailFromFrame) {
-        log('CHƯA ĐỌC ĐƯỢC EMAIL TỪ IFRAME.', 'error');
-        log('NẾU IFRAME BỊ CHẶN: MỞ TAB MỚI, COPY EMAIL DÁN VÀO Ô, RỒI BẤM "BẮT ĐẦU QUÉT".', 'info');
-        return;
-    }
+    if (isScanning) return;
+    if (!watchEmail) { log('CHƯA CÓ EMAIL.', 'error'); return; }
 
     isScanning = true;
-    scanCount = 0;
+    pollCount = 0;
     setBadge('scanStatus', 'ĐANG QUÉT', '');
     document.getElementById('btnStartScan').disabled = true;
     document.getElementById('btnStopScan').disabled = false;
-    log('BẮT ĐẦU QUÉT OTP (mỗi 3 giây)...');
+    log('BẮT ĐẦU QUÉT (mỗi 3 giây)...');
 
-    scanTimer = setInterval(() => {
-        scanCount++;
-        document.getElementById('scanCount').textContent = scanCount;
-
-        const otp = scanOTPFromFrame();
-        if (otp && otp !== lastOTP) {
-            lastOTP = otp;
-            showOTP(otp);
-        }
-    }, 3000);
+    scanInbox();
+    scanTimer = setInterval(scanInbox, 3000);
 }
 
 function stopScan() {
     isScanning = false;
-    if (scanTimer) {
-        clearInterval(scanTimer);
-        scanTimer = null;
-    }
+    if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
     setBadge('scanStatus', 'DỪNG', 'red');
     document.getElementById('btnStartScan').disabled = false;
     document.getElementById('btnStopScan').disabled = true;
-    log('ĐÃ DỪNG QUÉT.', 'info');
-}
-
-function manualScan() {
-    log('QUÉT THỦ CÔNG...');
-    const otp = scanOTPFromFrame();
-    if (otp) {
-        lastOTP = otp;
-        showOTP(otp);
-    } else {
-        log('CHƯA TÌM THẤY OTP.', 'info');
-    }
-}
-
-// ============================================================
-// TẢI IFRAME
-// ============================================================
-function loadFrame() {
-    log('ĐANG TẢI UNLIMITMAIL VÀO IFRAME...');
-    const frame = document.getElementById('mailFrame');
-    frame.src = 'https://unlimitmail.com/vi/temp-mail?' + Date.now();
-
-    frame.onload = () => {
-        log('IFRAME ĐÃ TẢI XONG.', 'success');
-        setBadge('ifStatus', 'ĐÃ TẢI', '');
-
-        // Chờ 2s để JS render
-        setTimeout(() => {
-            const ok = readEmailFromFrame();
-            if (ok) {
-                document.getElementById('btnStartScan').disabled = false;
-            }
-        }, 2000);
-    };
-
-    frame.onerror = () => {
-        log('LỖI TẢI IFRAME.', 'error');
-        setBadge('ifStatus', 'LỖI', 'red');
-    };
 }
 
 // ============================================================
 // XIN QUYỀN THÔNG BÁO
 // ============================================================
 async function requestNotify() {
-    if (!('Notification' in window)) {
-        log('TRÌNH DUYỆT KHÔNG HỖ TRỢ THÔNG BÁO.', 'error');
-        return;
-    }
+    if (!('Notification' in window)) { log('KHÔNG HỖ TRỢ.', 'error'); return; }
     const perm = await Notification.requestPermission();
     if (perm === 'granted') {
         log('ĐÃ CẤP QUYỀN THÔNG BÁO.', 'success');
@@ -507,31 +343,25 @@ async function requestNotify() {
 }
 
 // ============================================================
-// GẮN SỰ KIỆN
+// SỰ KIỆN
 // ============================================================
-document.getElementById('btnLoad').addEventListener('click', loadFrame);
-document.getElementById('btnReadEmail').addEventListener('click', () => {
-    const e = readEmailFromFrame();
-    if (e) document.getElementById('btnStartScan').disabled = false;
-});
+document.getElementById('btnCreate').addEventListener('click', createEmail);
 document.getElementById('btnStartScan').addEventListener('click', startScan);
 document.getElementById('btnStopScan').addEventListener('click', stopScan);
-document.getElementById('btnManualScan').addEventListener('click', manualScan);
+document.getElementById('btnManual').addEventListener('click', () => {
+    log('QUÉT THỦ CÔNG...');
+    scanInbox();
+});
 document.getElementById('btnTestNotify').addEventListener('click', requestNotify);
 document.getElementById('btnClear').addEventListener('click', () => {
     document.getElementById('log').innerHTML = '';
     log('ĐÃ XÓA LOG.');
 });
 
-// ============================================================
-// KHỞI TẠO
-// ============================================================
 window.addEventListener('load', () => {
     log('HỆ THỐNG SẴN SÀNG.');
-    log('QUY TRÌNH: BẤM 1 → 2 → 3.', 'info');
-    log('NẾU IFRAME TRẮNG: MỞ TAB MỚI UNLIMITMAIL, COPY EMAIL, DÁN VÀO Ô, BẤM QUÉT THỦ CÔNG.', 'info');
+    log('QUY TRÌNH: BẤM 1 → COPY EMAIL → NHẬP VMOS → BẤM 2.', 'info');
 });
 </script>
-
 </body>
 </html>
