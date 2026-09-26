@@ -45,15 +45,24 @@
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .badge { background: #00ff00; color: #000; padding: 2px 6px; font-size: 10px; margin-left: 10px; }
         .badge.red { background: #ff4444; color: #fff; }
-        .badge.yellow { background: #ffff00; color: #000; }
+        .otp-big {
+            font-size: 32px;
+            color: #00ff00;
+            text-align: center;
+            padding: 15px;
+            border: 2px dashed #00ff00;
+            margin: 10px 0;
+            letter-spacing: 8px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
-<h1>VMOS AUTO REGISTER — dt <span class="badge">GITHUB + SUPABASE</span></h1>
+<h1>VMOS AUTO REGISTER — dt <span class="badge">SUPABASE + 1SECMAIL</span></h1>
 
 <div class="box">
-    <h2>TRẠNG THÁI KẾT NỐI</h2>
+    <h2>TRẠNG THÁI</h2>
     <div>SUPABASE: <span id="sbStatus" class="badge red">CHƯA KẾT NỐI</span></div>
     <div>DATABASE: <span id="dbStatus" class="badge red">CHƯA KIỂM TRA</span></div>
     <div>STATUS: <span id="status">CHỜ LỆNH</span></div>
@@ -65,7 +74,7 @@
     <button id="btnStop" disabled>DỪNG</button>
     <button id="btnLoadHistory">TẢI LỊCH SỬ</button>
     <button id="btnTestSB">TEST SUPABASE</button>
-    <button id="btnTestInsert">TEST INSERT</button>
+    <button id="btnTestEmail">TEST EMAIL</button>
 </div>
 
 <div class="box">
@@ -81,7 +90,8 @@
         </div>
     </div>
     <div>OTP NHẬN ĐƯỢC:</div>
-    <input type="text" id="otpCode" readonly placeholder="chưa nhận">
+    <div class="otp-big" id="otpDisplay">------</div>
+    <input type="text" id="otpCode" readonly placeholder="chưa nhận" style="display:none;">
     <div>RECORD ID:</div>
     <input type="text" id="recordId" readonly placeholder="chưa lưu">
 </div>
@@ -107,22 +117,31 @@ const SUPABASE_ANON_KEY = 'sb_publishable_znEJflGWJOA1MA54SoebRg_Wkespji2';
 let supabaseClient = null;
 
 // ============================================================
+// CẤU HÌNH ỨNG DỤNG
+// ============================================================
+const CONFIG = {
+    // 1secmail API - miễn phí, không cần đăng ký
+    EMAIL_API: 'https://www.1secmail.com/api/v1/',
+    EMAIL_DOMAINS: ['1secmail.com', '1secmail.net', '1secmail.org', 'icloudmail.net', 'kzccv.com'],
+    
+    VMOS_REGISTER_URL: 'https://www.vmoscloud.com/register',
+    OTP_TIMEOUT: 300000,  // 5 phút
+    POLL_INTERVAL: 3000   // 3 giây
+};
+
+// ============================================================
 // KHỞI TẠO SUPABASE
 // ============================================================
 function initSupabase() {
     try {
-        // Kiểm tra thư viện Supabase đã tải chưa
         if (typeof window.supabase === 'undefined') {
-            log('THƯ VIỆN SUPABASE CHƯA TẢI. KIỂM TRA KẾT NỐI MẠNG.', 'error');
+            log('THƯ VIỆN SUPABASE CHƯA TẢI.', 'error');
             setSbStatus(false, 'LỖI TẢI THƯ VIỆN');
             return false;
         }
 
-        // Tạo client
         supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        
         log('ĐÃ KHỞI TẠO SUPABASE CLIENT.', 'success');
-        log(`URL: ${SUPABASE_URL}`, 'info');
         setSbStatus(true, 'ĐÃ KẾT NỐI');
         return true;
     } catch (e) {
@@ -132,7 +151,9 @@ function initSupabase() {
     }
 }
 
-// Test kết nối và kiểm tra bảng
+// ============================================================
+// TEST SUPABASE
+// ============================================================
 async function testSupabase() {
     if (!supabaseClient) {
         log('CLIENT CHƯA KHỞI TẠO.', 'error');
@@ -141,7 +162,6 @@ async function testSupabase() {
 
     log('ĐANG TEST KẾT NỐI SUPABASE...');
     try {
-        // Truy vấn bảng registrations
         const { data, error, count } = await supabaseClient
             .from('registrations')
             .select('*', { count: 'exact' })
@@ -150,72 +170,21 @@ async function testSupabase() {
         if (error) {
             log(`LỖI TRUY VẤN: ${error.message}`, 'error');
             log(`MÃ LỖI: ${error.code}`, 'error');
-            log(`CHI TIẾT: ${error.details || 'không có'}`, 'error');
-            log(`GỢI Ý: ${error.hint || 'không có'}`, 'error');
             
-            // Phân tích lỗi
             if (error.code === '42P01') {
-                log('=> BẢNG CHƯA TỒN TẠI. CHẠY FILE 001_init.sql TRONG SUPABASE SQL EDITOR.', 'error');
-            } else if (error.message.includes('JWT')) {
-                log('=> ANON KEY SAI HOẶC HẾT HẠN.', 'error');
-            } else if (error.message.includes('fetch')) {
-                log('=> KHÔNG KẾT NỐI ĐƯỢC. KIỂM TRA URL SUPABASE.', 'error');
+                log('=> BẢNG CHƯA TỒN TẠI. CHẠY SQL TRONG SUPABASE.', 'error');
             }
-            
             setDbStatus(false, 'LỖI BẢNG');
             return false;
         }
 
-        log(`KẾT NỐI OK. SỐ RECORD HIỆN CÓ: ${count || 0}`, 'success');
+        log(`KẾT NỐI OK. SỐ RECORD: ${count || 0}`, 'success');
         setDbStatus(true, `OK (${count || 0} RECORD)`);
         return true;
     } catch (e) {
-        log(`LỖI KHÔNG XÁC ĐỊNH: ${e.message}`, 'error');
+        log(`LỖI: ${e.message}`, 'error');
         setDbStatus(false, 'LỖI KẾT NỐI');
         return false;
-    }
-}
-
-// Test insert
-async function testInsert() {
-    if (!supabaseClient) {
-        log('CLIENT CHƯA KHỞI TẠO.', 'error');
-        return;
-    }
-
-    log('ĐANG TEST INSERT...');
-    const testData = {
-        email: 'test_' + Date.now() + '@mlongmail.com',
-        password: 'TestPass123!',
-        otp: null,
-        service: 'vmos',
-        status: 'pending'
-    };
-
-    try {
-        const { data, error } = await supabaseClient
-            .from('registrations')
-            .insert(testData)
-            .select()
-            .single();
-
-        if (error) {
-            log(`LỖI INSERT: ${error.message}`, 'error');
-            log(`MÃ: ${error.code}`, 'error');
-            
-            if (error.code === '42P01') {
-                log('=> BẢNG CHƯA TỒN TẠI. CHẠY SQL MIGRATION.', 'error');
-            } else if (error.code === '42501' || error.message.includes('policy')) {
-                log('=> RLS POLICY CHƯA CHO PHÉP INSERT. CHẠY LẠI SQL.', 'error');
-            }
-            return;
-        }
-
-        log(`INSERT THÀNH CÔNG. ID: ${data.id}`, 'success');
-        log(`EMAIL: ${data.email}`, 'success');
-        log(`CREATED_AT: ${data.created_at}`, 'success');
-    } catch (e) {
-        log(`LỖI: ${e.message}`, 'error');
     }
 }
 
@@ -272,12 +241,75 @@ function generatePassword() {
 }
 
 function generateEmail() {
-    const randomUser = 'vmos' + Math.random().toString(36).substring(2, 12);
-    return `${randomUser}@mlongmail.com`;
+    const user = 'vmos' + Math.random().toString(36).substring(2, 12);
+    const domain = CONFIG.EMAIL_DOMAINS[Math.floor(Math.random() * CONFIG.EMAIL_DOMAINS.length)];
+    return `${user}@${domain}`;
+}
+
+async function fetchWithTimeout(url, options = {}, timeout = 15000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        throw error;
+    }
 }
 
 // ============================================================
-// LƯU VÀO DATABASE
+// API 1SECMAIL
+// ============================================================
+
+// Lấy danh sách tin nhắn trong inbox
+async function fetchInbox(email) {
+    const [login, domain] = email.split('@');
+    const url = `${CONFIG.EMAIL_API}?action=getMessages&login=${login}&domain=${domain}`;
+    
+    try {
+        const response = await fetchWithTimeout(url);
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (e) {
+        return null;
+    }
+}
+
+// Lấy nội dung đầy đủ của 1 tin nhắn
+async function fetchMessage(email, id) {
+    const [login, domain] = email.split('@');
+    const url = `${CONFIG.EMAIL_API}?action=readMessage&login=${login}&domain=${domain}&id=${id}`;
+    
+    try {
+        const response = await fetchWithTimeout(url);
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (e) {
+        return null;
+    }
+}
+
+// Test email API
+async function testEmailAPI() {
+    log('ĐANG TEST EMAIL API (1SECMAIL)...');
+    const testEmail = generateEmail();
+    log(`EMAIL TEST: ${testEmail}`, 'info');
+    
+    const inbox = await fetchInbox(testEmail);
+    if (inbox === null) {
+        log('LỖI: KHÔNG GỌI ĐƯỢC API 1SECMAIL.', 'error');
+        return false;
+    }
+    
+    log(`API OK. INBOX TRỐNG: ${inbox.length === 0 ? 'CÓ' : 'KHÔNG'}`, 'success');
+    log('EMAIL SẴN SÀNG NHẬN OTP TỪ VMOS.', 'success');
+    return true;
+}
+
+// ============================================================
+// SUPABASE OPERATIONS
 // ============================================================
 async function saveToDatabase(email, password, otp) {
     if (!supabaseClient) {
@@ -304,7 +336,7 @@ async function saveToDatabase(email, password, otp) {
             return null;
         }
 
-        log(`ĐÃ LƯU VÀO SUPABASE. ID: ${data.id}`, 'success');
+        log(`ĐÃ LƯU. ID: ${data.id}`, 'success');
         document.getElementById('recordId').value = data.id;
         return data;
     } catch (error) {
@@ -316,7 +348,7 @@ async function saveToDatabase(email, password, otp) {
 async function updateOTP(id, otp) {
     if (!supabaseClient) return false;
 
-    log(`CẬP NHẬT OTP CHO RECORD ${id}...`);
+    log(`CẬP NHẬT OTP VÀO RECORD ${id}...`);
     const { error } = await supabaseClient
         .from('registrations')
         .update({ otp: otp, status: 'completed' })
@@ -330,9 +362,6 @@ async function updateOTP(id, otp) {
     return true;
 }
 
-// ============================================================
-// TẢI LỊCH SỬ
-// ============================================================
 async function loadHistory() {
     if (!supabaseClient) {
         logHistory('CLIENT CHƯA KHỞI TẠO.', 'error');
@@ -377,12 +406,93 @@ let currentPassword = null;
 let currentRecordId = null;
 let pollTimer = null;
 
+// Bước chờ OTP với poll thật
+async function stepWaitForOTP() {
+    log('BƯỚC 5: CHỜ OTP TỪ VMOS...');
+    setStatus('CHỜ OTP');
+    
+    const startTime = Date.now();
+    const seenIds = new Set();
+
+    return new Promise((resolve, reject) => {
+        pollTimer = setInterval(async () => {
+            if (!isRunning) {
+                clearInterval(pollTimer);
+                reject(new Error('Đã dừng'));
+                return;
+            }
+            
+            if (Date.now() - startTime > CONFIG.OTP_TIMEOUT) {
+                clearInterval(pollTimer);
+                reject(new Error('Hết thời gian chờ OTP (5 phút)'));
+                return;
+            }
+
+            try {
+                const messages = await fetchInbox(currentEmail);
+                
+                if (!messages || messages.length === 0) {
+                    // Vẫn đang chờ
+                    return;
+                }
+
+                // Duyệt từng message mới
+                for (const msg of messages) {
+                    if (seenIds.has(msg.id)) continue;
+                    seenIds.add(msg.id);
+
+                    log(`EMAIL MỚI TỪ: ${msg.from}`, 'info');
+                    log(`SUBJECT: ${msg.subject}`, 'info');
+
+                    // Lấy nội dung đầy đủ
+                    const fullMsg = await fetchMessage(currentEmail, msg.id);
+                    if (!fullMsg) continue;
+
+                    const text = (fullMsg.subject || '') + ' ' + (fullMsg.textBody || '') + ' ' + (fullMsg.body || '');
+
+                    // Tìm mã 6 số (VMOS dùng 6 chữ số)
+                    const otpMatch = text.match(/\b\d{6}\b/);
+                    
+                    if (otpMatch) {
+                        const otp = otpMatch[0];
+                        clearInterval(pollTimer);
+                        
+                        // Hiển thị OTP lớn
+                        document.getElementById('otpDisplay').textContent = otp;
+                        document.getElementById('otpCode').value = otp;
+                        
+                        log(`ĐÃ NHẬN OTP: ${otp}`, 'success');
+                        log('COPY VÀ DÁN VÀO FORM VMOS.', 'success');
+
+                        // Copy clipboard
+                        try {
+                            await navigator.clipboard.writeText(otp);
+                            log('ĐÃ COPY OTP VÀO CLIPBOARD.', 'success');
+                        } catch (e) {
+                            log('COPY THỦ CÔNG.', 'info');
+                        }
+
+                        // Lưu vào Supabase
+                        if (currentRecordId) {
+                            await updateOTP(currentRecordId, otp);
+                        }
+
+                        resolve(otp);
+                        return;
+                    }
+                }
+            } catch (err) {
+                // Bỏ qua lỗi, tiếp tục poll
+            }
+        }, CONFIG.POLL_INTERVAL);
+    });
+}
+
 async function startProcess() {
     if (isRunning) return;
 
-    // Kiểm tra Supabase trước khi chạy
     if (!supabaseClient) {
-        log('SUPABASE CHƯA KẾT NỐI. KHÔNG THỂ CHẠY.', 'error');
+        log('SUPABASE CHƯA KẾT NỐI.', 'error');
         return;
     }
 
@@ -391,40 +501,38 @@ async function startProcess() {
     document.getElementById('btnStop').disabled = false;
     document.getElementById('log').innerHTML = '';
     document.getElementById('otpCode').value = '';
+    document.getElementById('otpDisplay').textContent = '------';
     document.getElementById('recordId').value = '';
 
     try {
-        // Bước 1: Tạo email
+        // BƯỚC 1
         log('BƯỚC 1: TẠO EMAIL TẠM THỜI.');
         currentEmail = generateEmail();
         document.getElementById('tempEmail').value = currentEmail;
         log(`EMAIL: ${currentEmail}`, 'success');
 
-        // Bước 2: Tạo password
+        // BƯỚC 2
         log('BƯỚC 2: TẠO MẬT KHẨU.');
         currentPassword = generatePassword();
         document.getElementById('newPassword').value = currentPassword;
         log(`PASSWORD: ${currentPassword}`, 'success');
 
-        // Bước 3: Lưu vào Supabase
+        // BƯỚC 3
         log('BƯỚC 3: LƯU VÀO SUPABASE.');
         const row = await saveToDatabase(currentEmail, currentPassword, null);
-        if (row) {
-            currentRecordId = row.id;
-        }
+        if (row) currentRecordId = row.id;
 
-        // Bước 4: Mở VMOS
-        log('BƯỚC 4: MỞ TRANG VMOS.');
-        window.open('https://www.vmoscloud.com/register', '_blank');
-        log('NHẬP EMAIL + PASSWORD VÀO FORM VMOS.', 'info');
+        // BƯỚC 4
+        log('BƯỚC 4: MỞ VMOS.');
+        window.open(CONFIG.VMOS_REGISTER_URL, '_blank');
+        log('NHẬP EMAIL + PASSWORD VÀO VMOS.', 'info');
+        log(`EMAIL: ${currentEmail}`, 'info');
+        log(`PASSWORD: ${currentPassword}`, 'info');
 
-        // Bước 5: Chờ OTP (placeholder — cần API thực tế)
-        log('BƯỚC 5: CHỜ OTP...');
-        setStatus('CHỜ OTP');
-        log('LƯU Ý: UNLIMITMAIL KHÔNG CÓ API CÔNG KHAI.', 'info');
-        log('CẦN CẤU HÌNH ENDPOINT THỰC TẾ ĐỂ NHẬN OTP.', 'info');
-
-        setStatus('HOÀN TẤT BƯỚC 1-4');
+        // BƯỚC 5 - CHỜ OTP
+        const otp = await stepWaitForOTP();
+        log(`QUY TRÌNH HOÀN TẤT. OTP: ${otp}`, 'success');
+        setStatus('HOÀN TẤT');
     } catch (error) {
         log(`LỖI: ${error.message}`, 'error');
         setStatus('LỖI');
@@ -454,20 +562,20 @@ document.getElementById('btnStart').addEventListener('click', startProcess);
 document.getElementById('btnStop').addEventListener('click', stopProcess);
 document.getElementById('btnLoadHistory').addEventListener('click', loadHistory);
 document.getElementById('btnTestSB').addEventListener('click', testSupabase);
-document.getElementById('btnTestInsert').addEventListener('click', testInsert);
+document.getElementById('btnTestEmail').addEventListener('click', testEmailAPI);
 
-// Khởi tạo khi load xong
+// Khởi tạo khi load
 window.addEventListener('load', async () => {
     log('HỆ THỐNG ĐANG KHỞI ĐỘNG...');
     log(`SUPABASE URL: ${SUPABASE_URL}`);
-    log(`ANON KEY: ${SUPABASE_ANON_KEY.substring(0, 20)}...`);
     
-    // Đợi 1 giây để SDK load xong
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 800));
     
     if (initSupabase()) {
         await testSupabase();
     }
+    
+    log('EMAIL API: 1SECMAIL.COM (MIỄN PHÍ, KHÔNG CẦN ĐĂNG KÝ)', 'info');
 });
 </script>
 
