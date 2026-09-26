@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VMOS Auto Register - dt</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* Giao diện tối, máy móc */
+        body {
+            background: #0a0a0a;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .box {
+            border: 1px solid #00ff00;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #111;
+        }
+        h1 { font-size: 15px; border-bottom: 1px solid #00ff00; padding-bottom: 5px; }
+        h2 { font-size: 13px; color: #ffff00; margin-top: 0; }
+        button {
+            background: #00ff00; color: #000; border: none;
+            padding: 10px 20px; font-family: inherit;
+            font-weight: bold; cursor: pointer; margin: 5px;
+        }
+        button:disabled { background: #333; color: #666; cursor: not-allowed; }
+        input, textarea {
+            background: #111; border: 1px solid #00ff00;
+            color: #00ff00; padding: 8px;
+            font-family: inherit; width: 100%;
+            box-sizing: border-box; margin: 5px 0;
+        }
+        .log {
+            height: 280px; overflow-y: auto; font-size: 12px;
+            white-space: pre-wrap; border: 1px solid #333;
+            padding: 10px; background: #000;
+        }
+        .success { color: #00ff00; }
+        .error { color: #ff4444; }
+        .info { color: #ffff00; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .badge { background: #00ff00; color: #000; padding: 2px 6px; font-size: 10px; margin-left: 10px; }
+        .badge.red { background: #ff4444; color: #fff; }
+    </style>
+</head>
+<body>
+
+<h1>VMOS AUTO REGISTER — dt <span class="badge">GITHUB + SUPABASE</span></h1>
+
+<div class="box">
+    <h2>TRẠNG THÁI KẾT NỐI</h2>
+    <div>SUPABASE: <span id="sbStatus" class="badge red">CHƯA KẾT NỐI</span></div>
+    <div>STATUS: <span id="status">CHỜ LỆNH</span></div>
+</div>
+
+<div class="box">
+    <h2>ĐIỀU KHIỂN</h2>
+    <button id="btnStart">BẮT ĐẦU</button>
+    <button id="btnStop" disabled>DỪNG</button>
+    <button id="btnLoadHistory">TẢI LỊCH SỬ</button>
+    <button id="btnTestSB">TEST SUPABASE</button>
+</div>
+
+<div class="box">
+    <h2>THÔNG TIN EMAIL</h2>
+    <div class="grid">
+        <div>
+            <div>EMAIL TẠM THỜI:</div>
+            <input type="text" id="tempEmail" readonly placeholder="chưa tạo">
+        </div>
+        <div>
+            <div>MẬT KHẨU VMOS:</div>
+            <input type="text" id="newPassword" readonly placeholder="chưa tạo">
+        </div>
+    </div>
+    <div>OTP NHẬN ĐƯỢC:</div>
+    <input type="text" id="otpCode" readonly placeholder="chưa nhận">
+</div>
+
+<div class="box">
+    <h2>NHẬT KÝ</h2>
+    <div class="log" id="log"></div>
+</div>
+
+<div class="box">
+    <h2>LỊCH SỬ (SUPABASE)</h2>
+    <div class="log" id="historyLog" style="height:150px;"></div>
+</div>
+
+<script>
+// ============================================================
+// CẤU HÌNH SUPABASE - ĐÃ ĐIỀN SẴN
+// ============================================================
+const SUPABASE_URL = 'https://olsztipsxhopueenrdgu.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_znEJflGWJOA1MA54SoebRg_Wkespji2';
+
+// Khởi tạo Supabase client
+let supabase = null;
+
+// ============================================================
+// CẤU HÌNH UNLIMITMAIL
+// ============================================================
+const CONFIG = {
+    UNLIMITMAIL_URL: "https://unlimitmail.com/vi/temp-mail",
+    API_ENDPOINTS: {
+        GENERATE: "/api/temp-mail/generate",
+        INBOX: "/api/temp-mail/inbox"
+    },
+    VMOS_REGISTER_URL: "https://www.vmoscloud.com/register",
+    OTP_TIMEOUT: 180000,
+    POLL_INTERVAL: 5000
+};
+
+// ============================================================
+// BIẾN TOÀN CỤC
+// ============================================================
+let currentEmail = null;
+let currentPassword = null;
+let isRunning = false;
+let pollTimer = null;
+
+// ============================================================
+// HÀM TIỆN ÍCH
+// ============================================================
+
+function log(message, type = 'info') {
+    const logEl = document.getElementById('log');
+    const timestamp = new Date().toLocaleTimeString('vi-VN');
+    const className = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
+    logEl.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+}
+
+function logHistory(message, type = 'info') {
+    const logEl = document.getElementById('historyLog');
+    const timestamp = new Date().toLocaleTimeString('vi-VN');
+    const className = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
+    logEl.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setStatus(status) {
+    document.getElementById('status').textContent = status;
+}
+
+function setSbStatus(ok) {
+    const el = document.getElementById('sbStatus');
+    if (ok) {
+        el.textContent = 'ĐÃ KẾT NỐI';
+        el.className = 'badge';
+    } else {
+        el.textContent = 'LỖI KẾT NỐI';
+        el.className = 'badge red';
+    }
+}
+
+function generatePassword() {
+    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lower = 'abcdefghijklmnopqrstuvwxyz';
+    const digits = '0123456789';
+    const special = '!@#$%^&*';
+    let password = '';
+    password += upper.charAt(Math.floor(Math.random() * upper.length));
+    password += lower.charAt(Math.floor(Math.random() * lower.length));
+    password += digits.charAt(Math.floor(Math.random() * digits.length));
+    password += special.charAt(Math.floor(Math.random() * special.length));
+    const all = upper + lower + digits + special;
+    for (let i = 0; i < 8; i++) {
+        password += all.charAt(Math.floor(Math.random() * all.length));
+    }
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+async function fetchWithTimeout(url, options = {}, timeout = 15000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        throw error;
+    }
+}
+
+function extractOTP(text) {
+    if (!text) return null;
+    const match = text.match(/\b\d{4,8}\b/);
+    return match ? match[0] : null;
+}
+
+// ============================================================
+// KHỞI TẠO SUPABASE
+// ============================================================
+function initSupabase() {
+    try {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        log('ĐÃ KHỞI TẠO SUPABASE CLIENT.', 'success');
+        setSbStatus(true);
+        testSupabaseConnection();
+    } catch (e) {
+        log(`LỖI KHỞI TẠO SUPABASE: ${e.message}`, 'error');
+        setSbStatus(false);
+    }
+}
+
+// Test kết nối Supabase
+async function testSupabaseConnection() {
+    try {
+        const { data, error } = await supabase
+            .from('registrations')
+            .select('count', { count: 'exact', head: true });
+        
+        if (error) {
+            log(`TEST SUPABASE: ${error.message}`, 'error');
+            setSbStatus(false);
+            return false;
+        }
+        
+        log('TEST SUPABASE: BẢNG registrations TỒN TẠI.', 'success');
+        setSbStatus(true);
+        return true;
+    } catch (e) {
+        log(`TEST SUPABASE THẤT BẠI: ${e.message}`, 'error');
+        setSbStatus(false);
+        return false;
+    }
+}
+
+// ============================================================
+// SUPABASE DATABASE OPERATIONS
+// ============================================================
+async function saveToDatabase(email, password, otp) {
+    if (!supabase) {
+        log('SUPABASE CHƯA KHỞI TẠO.', 'error');
+        return null;
+    }
+    
+    log('ĐANG LƯU VÀO SUPABASE...');
+    try {
+        const { data, error } = await supabase
+            .from('registrations')
+            .insert({
+                email: email,
+                password: password,
+                otp: otp,
+                service: 'vmos',
+                status: otp ? 'completed' : 'pending'
+            })
+            .select();
+        
+        if (error) throw error;
+        log(`ĐÃ LƯU VÀO SUPABASE: ID ${data[0].id}`, 'success');
+        return data[0];
+    } catch (error) {
+        log(`LỖI LƯU SUPABASE: ${error.message}`, 'error');
+        return null;
+    }
+}
+
+async function loadHistory() {
+    if (!supabase) {
+        logHistory('SUPABASE CHƯA KHỞI TẠO.', 'error');
+        return;
+    }
+    
+    logHistory('ĐANG TẢI LỊCH SỬ...');
+    try {
+        const { data, error } = await supabase
+            .from('registrations')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(20);
+        
+        if (error) throw error;
+        
+        document.getElementById('historyLog').innerHTML = '';
+        if (!data || data.length === 0) {
+            logHistory('CHƯA CÓ DỮ LIỆU.');
+            return;
+        }
+        
+        data.forEach(row => {
+            const time = new Date(row.created_at).toLocaleString('vi-VN');
+            logHistory(`[${time}] ${row.email} | OTP: ${row.otp || 'N/A'} | ${row.status}`, 
+                       row.status === 'completed' ? 'success' : 'info');
+        });
+    } catch (error) {
+        logHistory(`LỖI TẢI LỊCH SỬ: ${error.message}`, 'error');
+    }
+}
+
+// ============================================================
+// UNLIMITMAIL API
+// ============================================================
+async function createEmailViaAPI() {
+    log('ĐANG GỌI API TẠO EMAIL...');
+    
+    try {
+        const response = await fetchWithTimeout(CONFIG.API_ENDPOINTS.GENERATE, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Referer': CONFIG.UNLIMITMAIL_URL
+            },
+            body: JSON.stringify({})
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const email = data.email || data.address || data.mail;
+            if (email) {
+                currentEmail = email;
+                document.getElementById('tempEmail').value = email;
+                log(`EMAIL TỪ API: ${email}`, 'success');
+                return email;
+            }
+        }
+    } catch (e) {
+        log(`ENDPOINT GENERATE THẤT BẠI: ${e.message}`, 'error');
+    }
+    
+    // Fallback
+    const randomUser = 'vmos' + Math.random().toString(36).substring(2, 12);
+    const email = `${randomUser}@mlongmail.com`;
+    currentEmail = email;
+    document.getElementById('tempEmail').value = email;
+    log(`EMAIL GENERATED (FALLBACK): ${email}`, 'info');
+    return email;
+}
+
+async function fetchInboxViaAPI(email) {
+    const url = `${CONFIG.API_ENDPOINTS.INBOX}?email=${encodeURIComponent(email)}`;
+    try {
+        const response = await fetchWithTimeout(url, {
+            method: 'GET',
+            headers: { 'Referer': CONFIG.UNLIMITMAIL_URL }
+        });
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (e) {
+        // Bỏ qua
+    }
+    return null;
+}
+
+// ============================================================
+// QUY TRÌNH CHÍNH
+// ============================================================
+async function stepCreateEmail() {
+    log('BƯỚC 1: TẠO EMAIL TẠM THỜI.');
+    await createEmailViaAPI();
+}
+
+function stepGeneratePassword() {
+    log('BƯỚC 2: TẠO MẬT KHẨU VMOS.');
+    currentPassword = generatePassword();
+    document.getElementById('newPassword').value = currentPassword;
+    log(`MẬT KHẨU: ${currentPassword}`, 'success');
+}
+
+async function stepWaitForOTP() {
+    log('BƯỚC 3: CHỜ OTP TỪ VMOS.');
+    setStatus('CHỜ OTP');
+    const startTime = Date.now();
+    
+    return new Promise((resolve, reject) => {
+        pollTimer = setInterval(async () => {
+            if (!isRunning) {
+                clearInterval(pollTimer);
+                reject(new Error('Đã dừng'));
+                return;
+            }
+            if (Date.now() - startTime > CONFIG.OTP_TIMEOUT) {
+                clearInterval(pollTimer);
+                reject(new Error('Hết thời gian chờ OTP'));
+                return;
+            }
+            
+            try {
+                const data = await fetchInboxViaAPI(currentEmail);
+                if (data && data.messages && data.messages.length > 0) {
+                    for (const msg of data.messages) {
+                        const text = (msg.subject || '') + ' ' + (msg.body || msg.html || '');
+                        const otp = extractOTP(text);
+                        if (otp) {
+                            clearInterval(pollTimer);
+                            document.getElementById('otpCode').value = otp;
+                            log(`ĐÃ NHẬN OTP: ${otp}`, 'success');
+                            resolve(otp);
+                            return;
+                        }
+                    }
+                }
+            } catch (err) {
+                // Bỏ qua
+            }
+        }, CONFIG.POLL_INTERVAL);
+    });
+}
+
+function stepOpenVMOS() {
+    log('BƯỚC 4: MỞ TRANG ĐĂNG KÝ VMOS.');
+    window.open(CONFIG.VMOS_REGISTER_URL, '_blank');
+    log('NHẬP THÔNG TIN VÀO FORM VMOS.', 'info');
+    log(`EMAIL: ${currentEmail}`, 'info');
+    log(`PASSWORD: ${currentPassword}`, 'info');
+}
+
+// ============================================================
+// ĐIỀU KHIỂN
+// ============================================================
+async function startProcess() {
+    if (isRunning) return;
+    isRunning = true;
+    
+    document.getElementById('btnStart').disabled = true;
+    document.getElementById('btnStop').disabled = false;
+    document.getElementById('log').innerHTML = '';
+    
+    try {
+        await stepCreateEmail();
+        stepGeneratePassword();
+        stepOpenVMOS();
+        
+        const otp = await stepWaitForOTP();
+        log('QUY TRÌNH HOÀN TẤT.', 'success');
+        await saveToDatabase(currentEmail, currentPassword, otp);
+        setStatus('HOÀN TẤT');
+    } catch (error) {
+        log(`LỖI: ${error.message}`, 'error');
+        if (currentEmail) {
+            await saveToDatabase(currentEmail, currentPassword, null);
+        }
+        setStatus('LỖI');
+    } finally {
+        isRunning = false;
+        document.getElementById('btnStart').disabled = false;
+        document.getElementById('btnStop').disabled = true;
+    }
+}
+
+function stopProcess() {
+    isRunning = false;
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+    log('ĐÃ DỪNG.', 'info');
+    setStatus('ĐÃ DỪNG');
+    document.getElementById('btnStart').disabled = false;
+    document.getElementById('btnStop').disabled = true;
+}
+
+// ============================================================
+// GẮN SỰ KIỆN
+// ============================================================
+document.getElementById('btnStart').addEventListener('click', startProcess);
+document.getElementById('btnStop').addEventListener('click', stopProcess);
+document.getElementById('btnLoadHistory').addEventListener('click', loadHistory);
+document.getElementById('btnTestSB').addEventListener('click', testSupabaseConnection);
+
+// Khởi tạo khi load
+window.addEventListener('load', () => {
+    log('HỆ THỐNG SẴN SÀNG.');
+    log(`SUPABASE URL: ${SUPABASE_URL}`);
+    initSupabase();
+});
+</script>
+
+</body>
+  </html>
