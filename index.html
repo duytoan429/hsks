@@ -110,7 +110,8 @@
             <input type="text" id="watchEmail" readonly placeholder="chưa tạo — bấm nút 1">
         </div>
         <div class="note">
-            Copy email này vào form VMOS đăng ký. Đợi VMOS gửi OTP → web tự bắt.
+            Copy email này dán vào form VMOS. Đợi VMOS gửi OTP → web tự bắt được.
+            (1secmail.com — miễn phí, không cần đăng ký, có API sẵn)
         </div>
     </div>
 
@@ -138,11 +139,10 @@
 
 <script>
 // ============================================================
-// CẤU HÌNH
+// CẤU HÌNH 1SECMAIL
 // ============================================================
-const SUPABASE_URL = 'https://olsztipsxhopueenrdgu.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_znEJflGWJOA1MA54SoebRg_Wkespji2';
-const PROXY_URL = `${SUPABASE_URL}/functions/v1/unlimit-proxy`;
+const API = 'https://www.1secmail.com/api/v1/';
+const DOMAINS = ['1secmail.com', '1secmail.net', '1secmail.org', 'kzccv.com', 'qiott.com', 'wuuvo.com'];
 
 // ============================================================
 // BIẾN
@@ -152,7 +152,7 @@ let isScanning = false;
 let scanTimer = null;
 let pollCount = 0;
 let lastOTP = null;
-let lastMessageId = null;
+let seenMessageIds = new Set();
 
 // ============================================================
 // LOG
@@ -172,54 +172,49 @@ function setBadge(id, text, color) {
 }
 
 // ============================================================
-// GỌI PROXY
+// TẠO EMAIL 1SECMAIL
 // ============================================================
-async function proxyCall(action, params = {}) {
-    const qs = new URLSearchParams({ action, ...params });
-    const url = `${PROXY_URL}?${qs.toString()}`;
+function createEmail() {
+    log('ĐANG TẠO EMAIL 1SECMAIL...');
+    setBadge('emailStatus', 'ĐANG TẠO', 'yellow');
 
-    const res = await fetch(url, {
-        headers: {
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'apikey': SUPABASE_ANON_KEY
-        }
-    });
+    const user = 'vmos' + Math.random().toString(36).substring(2, 12);
+    const domain = DOMAINS[Math.floor(Math.random() * DOMAINS.length)];
+    const email = `${user}@${domain}`;
 
-    if (!res.ok) {
-        const t = await res.text();
-        throw new Error(`HTTP ${res.status}: ${t.substring(0, 200)}`);
-    }
-    return await res.json();
+    watchEmail = email;
+    seenMessageIds = new Set();
+    lastOTP = null;
+
+    document.getElementById('watchEmail').value = email;
+    document.getElementById('otpDisplay').textContent = '------';
+    document.getElementById('otpStatus').value = 'CHƯA CÓ';
+    document.getElementById('otpTime').value = '---';
+    document.getElementById('pollCount').textContent = '0';
+
+    setBadge('emailStatus', 'SẴN SÀNG', '');
+    log(`EMAIL ĐÃ TẠO: ${email}`, 'success');
+    log('COPY EMAIL NÀY DÁN VÀO FORM VMOS.', 'info');
+    document.getElementById('btnStartScan').disabled = false;
 }
 
 // ============================================================
-// TẠO EMAIL
+// GỌI API 1SECMAIL
 // ============================================================
-async function createEmail() {
-    log('ĐANG GỌI PROXY TẠO EMAIL...');
-    setBadge('emailStatus', 'ĐANG TẠO', 'yellow');
+async function fetchInbox(email) {
+    const [login, domain] = email.split('@');
+    const url = `${API}?action=getMessages&login=${login}&domain=${domain}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+}
 
-    try {
-        const data = await proxyCall('generate');
-        const email = data.email || data.address || data.mail || data.data?.email;
-
-        if (!email) {
-            log(`RESPONSE KHÔNG CÓ EMAIL: ${JSON.stringify(data).substring(0, 200)}`, 'error');
-            setBadge('emailStatus', 'LỖI FORMAT', 'red');
-            return;
-        }
-
-        watchEmail = email;
-        document.getElementById('watchEmail').value = email;
-        setBadge('emailStatus', 'SẴN SÀNG', '');
-        log(`EMAIL ĐÃ TẠO: ${email}`, 'success');
-        log('COPY EMAIL NÀY VÀO VMOS.', 'info');
-        document.getElementById('btnStartScan').disabled = false;
-    } catch (e) {
-        log(`LỖI: ${e.message}`, 'error');
-        log('KIỂM TRA: EDGE FUNCTION ĐÃ DEPLOY CHƯA? ENDPOINT ĐÃ ĐÚNG CHƯA?', 'error');
-        setBadge('emailStatus', 'LỖI', 'red');
-    }
+async function fetchMessage(email, id) {
+    const [login, domain] = email.split('@');
+    const url = `${API}?action=readMessage&login=${login}&domain=${domain}&id=${id}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
 }
 
 // ============================================================
@@ -232,22 +227,28 @@ async function scanInbox() {
     document.getElementById('pollCount').textContent = pollCount;
 
     try {
-        const data = await proxyCall('inbox', { email: watchEmail });
-        const messages = data.messages || data.data || data.inbox || (Array.isArray(data) ? data : []);
+        const messages = await fetchInbox(watchEmail);
 
-        if (!messages.length) return;
+        if (!Array.isArray(messages) || messages.length === 0) {
+            return;
+        }
+
+        log(`INBOX CÓ ${messages.length} EMAIL.`, 'info');
 
         for (const msg of messages) {
-            const id = msg.id || msg.uid || msg.message_id;
-            if (id && id === lastMessageId) continue;
-            lastMessageId = id;
+            const id = msg.id;
+            if (seenMessageIds.has(id)) continue;
+            seenMessageIds.add(id);
 
-            const subject = msg.subject || msg.title || '';
-            const body = msg.body || msg.html || msg.text || msg.content || msg.intro || '';
-            const text = subject + ' ' + body;
+            log(`EMAIL MỚI: ${msg.subject || '(không tiêu đề)'} TỪ ${msg.from}`, 'info');
 
-            log(`EMAIL MỚI: ${subject}`, 'info');
+            // Lấy nội dung đầy đủ
+            const full = await fetchMessage(watchEmail, id);
+            if (!full) continue;
 
+            const text = (full.subject || '') + ' ' + (full.textBody || '') + ' ' + (full.body || '');
+
+            // Tìm OTP 6 số
             const m = text.match(/\b\d{6}\b/);
             if (m) {
                 showOTP(m[0]);
@@ -277,12 +278,14 @@ function showOTP(otp) {
 
     log(`OTP: ${otp}`, 'success');
 
+    // Copy clipboard
     if (navigator.clipboard) {
         navigator.clipboard.writeText(otp)
             .then(() => log('ĐÃ COPY VÀO CLIPBOARD.', 'success'))
             .catch(() => log('COPY THỦ CÔNG.', 'info'));
     }
 
+    // Bíp
     try {
         const ac = new (window.AudioContext || window.webkitAudioContext)();
         [0, 200, 400].forEach(d => setTimeout(() => {
@@ -295,6 +298,7 @@ function showOTP(otp) {
         setTimeout(() => ac.close(), 1000);
     } catch (e) {}
 
+    // Thông báo
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
             new Notification('VMOS OTP', { body: otp, requireInteraction: true, tag: 'vmos-otp' });
@@ -303,7 +307,7 @@ function showOTP(otp) {
 }
 
 // ============================================================
-// ĐIỀU KHIỂN QUÉT
+// ĐIỀU KHIỂN
 // ============================================================
 function startScan() {
     if (isScanning) return;
@@ -328,9 +332,6 @@ function stopScan() {
     document.getElementById('btnStopScan').disabled = true;
 }
 
-// ============================================================
-// XIN QUYỀN THÔNG BÁO
-// ============================================================
 async function requestNotify() {
     if (!('Notification' in window)) { log('KHÔNG HỖ TRỢ.', 'error'); return; }
     const perm = await Notification.requestPermission();
@@ -361,6 +362,7 @@ document.getElementById('btnClear').addEventListener('click', () => {
 window.addEventListener('load', () => {
     log('HỆ THỐNG SẴN SÀNG.');
     log('QUY TRÌNH: BẤM 1 → COPY EMAIL → NHẬP VMOS → BẤM 2.', 'info');
+    log('EMAIL DÙNG 1SECMAIL.COM — KHÔNG CẦN PROXY, KHÔNG CẦN SUPABASE.', 'success');
 });
 </script>
 </body>
